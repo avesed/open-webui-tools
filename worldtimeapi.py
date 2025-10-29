@@ -1,11 +1,3 @@
-"""
-title: World Time API Tool
-author: Assistant
-description: Get current time information based on IP address or timezone
-version: 0.1.0
-requirements: requests
-"""
-
 import requests
 from typing import Optional
 
