@@ -1,2 +1,2 @@
-## How to use
-Copy the code to open-webui tool section
+# A list of tools I create for Open-WebUI
+
