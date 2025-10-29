@@ -125,7 +125,7 @@ class Tools:
                 if not articles:
                     return "No articles found."
 
-                formatted_result = f"📰 Found {result.get('totalResults', len(articles))} articles:\n\n"
+                formatted_result = f"Found {result.get('totalResults', len(articles))} articles:\n\n"
                 for idx, article in enumerate(articles[:10], 1):  # Limit to 10 articles
                     formatted_result += (
                         f"**{idx}. {article.get('title', 'No title')}**\n"
