@@ -1,2 +1,2 @@
-# How to use
+## How to use
 Copy the code to open-webui tool section
