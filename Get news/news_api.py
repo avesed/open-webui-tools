@@ -1,3 +1,10 @@
+"""
+title: News
+author: Avesed
+description: Get news from newsapi.org
+version: 1.0.0
+"""
+
 from pydantic import BaseModel, Field
 from newsapi import NewsApiClient
 
@@ -19,10 +26,10 @@ class Tools:
         sources: str = "",
     ) -> str:
         """
-        Get the top headlines for a given category and country.
+        Get the top headlines. (Use at least one param, set :param category: to general as default)
 
         :param q: Keywords or a phrase to search for (optional, must be in English)
-        :param category: Category of the news - business, entertainment, health, science, sports, technology (optional, do not use to search in general)
+        :param category: Category of the news, e.g., general, business, entertainment, health, science, sports, technology (optional)
         :param country: 2-letter ISO 3166-1 country code, e.g., us, gb, cn (optional, cannot be used with sources)
         :param sources: Comma-separated news sources, e.g., bbc-news,the-verge (optional, cannot be used with country)
         :return: Top headlines articles
@@ -125,7 +132,9 @@ class Tools:
                 if not articles:
                     return "No articles found."
 
-                formatted_result = f"Found {result.get('totalResults', len(articles))} articles:\n\n"
+                formatted_result = (
+                    f"Found {result.get('totalResults', len(articles))} articles:\n\n"
+                )
                 for idx, article in enumerate(articles[:10], 1):  # Limit to 10 articles
                     formatted_result += (
                         f"**{idx}. {article.get('title', 'No title')}**\n"

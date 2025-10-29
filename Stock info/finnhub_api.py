@@ -1,3 +1,9 @@
+"""
+title: Get stock info from Finnhub
+author: Avesed
+description: Get stock info from Finnhub using their API
+version: 1.0.0
+"""
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
 import finnhub
@@ -11,7 +17,7 @@ class Tools:
 
         FINNHUB_API_KEY: str = Field(
             default="",
-            description="Finnhub API密钥",
+            description="Finnhub API Key",
         )
 
     def __init__(self):
@@ -209,7 +215,7 @@ class Tools:
         __user__: dict = {},
     ) -> str:
         """
-        获取公司财报惊喜数据
+        获取公司财报数据
 
         :param symbol: 股票代码
         :param limit: 返回记录数量，默认5
