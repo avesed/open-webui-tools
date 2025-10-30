@@ -1,412 +1,540 @@
 """
-title: Get stock info from Finnhub
+title: Finnhub_api
 author: Avesed
-description: Get stock info from Finnhub using their API
-version: 1.0.0
+version: 2.0
+description: use finnhub api to get stock datas
 """
-from pydantic import BaseModel, Field
-from typing import Optional, Literal
-import finnhub
-import pandas as pd
+
+import requests
 import json
+from typing import Callable, Any
+from pydantic import BaseModel, Field
 
 
 class Tools:
     class Valves(BaseModel):
-        """配置参数 - 用户可以在界面中修改"""
-
         FINNHUB_API_KEY: str = Field(
-            default="",
-            description="Finnhub API Key",
+            default="", description="Finnhub API Key"
         )
 
     def __init__(self):
         self.valves = self.Valves()
 
-    def _get_client(self):
-        """初始化Finnhub客户端"""
-        api_key = self.valves.FINNHUB_API_KEY.strip()
+    def finnhub_stock_quote(self, symbol: str) -> str:
+        """
+        获取股票实时报价
 
-        if not api_key:
-            return "错误: 请先在工具设置中配置 Finnhub API 密钥。请前往: 工作区 > 工具 > Finnhub Market Data Tool > 设置"
+        :param symbol: 股票代码，如 AAPL, TSLA, BINANCE:BTCUSDT
+        :return: 股票报价信息
+        """
+        if not self.valves.FINNHUB_API_KEY:
+            return "错误: 请先在工具设置中配置 Finnhub API Key"
 
         try:
-            return finnhub.Client(api_key=api_key)
+            url = "https://finnhub.io/api/v1/quote"
+            params = {"symbol": symbol, "token": self.valves.FINNHUB_API_KEY}
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+
+            data = response.json()
+
+            if not data or data.get("c") == 0:
+                return f"未找到股票代码: {symbol}"
+
+            result = f"""
+                    {symbol} 股票报价
+
+                    当前价格: ${data.get('c', 'N/A')}
+                    最高价: ${data.get('h', 'N/A')}
+                    最低价: ${data.get('l', 'N/A')}
+                    开盘价: ${data.get('o', 'N/A')}
+                    前收盘价: ${data.get('pc', 'N/A')}
+                    涨跌: ${data.get('d', 'N/A')} ({data.get('dp', 'N/A')}%)
+                    更新时间戳: {data.get('t', 'N/A')}
+                    """
+            return result.strip()
+
         except Exception as e:
-            return f"初始化客户端失败: {str(e)}\n请检查 API 密钥是否正确"
+            return f"获取股票报价失败: {str(e)}"
 
-    def get_stock_quote(
-        self,
-        symbol: str,
-        __user__: dict = {},
-    ) -> str:
+    def finnhub_company_profile(self, symbol: str) -> str:
         """
-        获取股票实时报价信息
+        获取公司详细信息 (Profile2)
 
-        :param symbol: 股票代码，例如 'AAPL', 'TSLA', 'GOOGL'
-        :return: 包含当前价格、开盘价、最高价、最低价等信息
+        :param symbol: 股票代码，如 AAPL, TSLA
+        :return: 公司信息
         """
-        client = self._get_client()
-        if isinstance(client, str):
-            return client
+        if not self.valves.FINNHUB_API_KEY:
+            return "错误: 请先在工具设置中配置 Finnhub API Key"
 
         try:
-            data = client.quote(symbol)
-            return f"""
-            **{symbol} 股票报价**
-            
-            当前价格: ${data.get('c', 'N/A')}
-            涨跌: ${data.get('d', 'N/A')} ({data.get('dp', 'N/A')}%)
-            最高价: ${data.get('h', 'N/A')}
-            最低价: ${data.get('l', 'N/A')}
-            开盘价: ${data.get('o', 'N/A')}
-            前收盘价: ${data.get('pc', 'N/A')}
-            时间戳: {data.get('t', 'N/A')}
-            """
-        except Exception as e:
-            return f"获取报价失败: {str(e)}"
+            url = "https://finnhub.io/api/v1/stock/profile2"
+            params = {"symbol": symbol, "token": self.valves.FINNHUB_API_KEY}
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
 
-    def get_company_profile(
-        self,
-        symbol: str,
-        __user__: dict = {},
-    ) -> str:
-        """
-        获取公司详细资料
+            data = response.json()
 
-        :param symbol: 股票代码，例如 'AAPL', 'MSFT'
-        :return: 公司名称、行业、市值、网站等信息
-        """
-        client = self._get_client()
-        if isinstance(client, str):
-            return client
-
-        try:
-            data = client.company_profile(symbol=symbol)
-            return f"""
-            **{data.get('name', 'N/A')} ({symbol})**
-            
-            行业: {data.get('finnhubIndustry', 'N/A')}
-            国家: {data.get('country', 'N/A')}
-            交易所: {data.get('exchange', 'N/A')}
-            市值: ${data.get('marketCapitalization', 'N/A')}M
-            IPO日期: {data.get('ipo', 'N/A')}
-            股票数: {data.get('shareOutstanding', 'N/A')}M
-            网站: {data.get('weburl', 'N/A')}
-            电话: {data.get('phone', 'N/A')}
-            Logo: {data.get('logo', 'N/A')}
-            """
-        except Exception as e:
-            return f"获取公司资料失败: {str(e)}"
-
-    def get_company_news(
-        self,
-        symbol: str,
-        from_date: str,
-        to_date: str,
-        __user__: dict = {},
-    ) -> str:
-        """
-        获取公司相关新闻
-
-        :param symbol: 股票代码
-        :param from_date: 开始日期 (格式: YYYY-MM-DD)
-        :param to_date: 结束日期 (格式: YYYY-MM-DD)
-        :return: 新闻列表
-        """
-        client = self._get_client()
-        if isinstance(client, str):
-            return client
-
-        try:
-            news = client.company_news(symbol, _from=from_date, to=to_date)
-            if not news:
-                return f"在 {from_date} 至 {to_date} 期间没有找到 {symbol} 的新闻"
-
-            result = f"**{symbol} 公司新闻 ({from_date} 至 {to_date})**\n\n"
-            for i, item in enumerate(news[:5], 1):  # 限制显示前5条
-                result += f"{i}. **{item.get('headline', 'N/A')}**\n"
-                result += f"   日期: {item.get('datetime', 'N/A')}\n"
-                result += f"   链接: {item.get('url', 'N/A')}\n"
-                result += f"   摘要: {item.get('summary', 'N/A')[:150]}...\n\n"
-
-            return result
-        except Exception as e:
-            return f"获取新闻失败: {str(e)}"
-
-    def get_stock_candles(
-        self,
-        symbol: str,
-        resolution: Literal["1", "5", "15", "30", "60", "D", "W", "M"],
-        from_timestamp: int,
-        to_timestamp: int,
-        __user__: dict = {},
-    ) -> str:
-        """
-        获取股票K线数据
-
-        :param symbol: 股票代码
-        :param resolution: 时间间隔 ('1'=1分钟, '5'=5分钟, 'D'=日, 'W'=周, 'M'=月)
-        :param from_timestamp: 开始时间戳 (Unix时间戳)
-        :param to_timestamp: 结束时间戳 (Unix时间戳)
-        :return: K线数据
-        """
-        client = self._get_client()
-        if isinstance(client, str):
-            return client
-
-        try:
-            data = client.stock_candles(
-                symbol, resolution, from_timestamp, to_timestamp
-            )
-
-            if data.get("s") == "no_data":
-                return f"没有找到 {symbol} 的K线数据"
-
-            df = pd.DataFrame(data)
-            return f"""
-            **{symbol} K线数据 (分辨率: {resolution})**
-            
-            数据点数: {len(df)}
-            
-            最新数据:
-            {df.tail(10).to_string()}
-            """
-        except Exception as e:
-            return f"获取K线数据失败: {str(e)}"
-
-    def get_recommendation_trends(
-        self,
-        symbol: str,
-        __user__: dict = {},
-    ) -> str:
-        """
-        获取分析师推荐趋势
-
-        :param symbol: 股票代码
-        :return: 买入/持有/卖出推荐统计
-        """
-        client = self._get_client()
-        if isinstance(client, str):
-            return client
-
-        try:
-            data = client.recommendation_trends(symbol)
             if not data:
-                return f"没有找到 {symbol} 的推荐数据"
+                return f"未找到公司信息: {symbol}"
 
-            result = f"**{symbol} 分析师推荐趋势**\n\n"
-            for item in data[:3]:  # 显示最近3个月
-                result += f"**{item.get('period', 'N/A')}**\n"
-                result += f"   强力买入: {item.get('strongBuy', 0)}\n"
-                result += f"   买入: {item.get('buy', 0)}\n"
-                result += f"   持有: {item.get('hold', 0)}\n"
-                result += f"   卖出: {item.get('sell', 0)}\n"
-                result += f"   强力卖出: {item.get('strongSell', 0)}\n\n"
+            result = f"""
+                    {data.get('name', 'N/A')} ({symbol})
 
-            return result
+                    行业: {data.get('finnhubIndustry', 'N/A')}
+                    网站: {data.get('weburl', 'N/A')}
+                    国家: {data.get('country', 'N/A')}
+                    交易所: {data.get('exchange', 'N/A')}
+                    股票代码: {data.get('ticker', 'N/A')}
+                    市值: ${data.get('marketCapitalization', 'N/A')}M
+                    IPO日期: {data.get('ipo', 'N/A')}
+                    电话: {data.get('phone', 'N/A')}
+                    股份流通: {data.get('shareOutstanding', 'N/A')}M
+                    Logo: {data.get('logo', 'N/A')}                        
+                    """
+            return result.strip()
+
         except Exception as e:
-            return f"获取推荐趋势失败: {str(e)}"
+            return f"获取公司信息失败: {str(e)}"
 
-    def get_company_earnings(
-        self,
-        symbol: str,
-        limit: int = 5,
-        __user__: dict = {},
-    ) -> str:
+    def finnhub_company_peers(self, symbol: str) -> str:
         """
-        获取公司财报数据
+        获取公司同行/竞争对手列表
 
-        :param symbol: 股票代码
-        :param limit: 返回记录数量，默认5
-        :return: 实际EPS vs 预期EPS
+        :param symbol: 股票代码，如 AAPL, TSLA
+        :return: 同行公司列表
         """
-        client = self._get_client()
-        if isinstance(client, str):
-            return client
+        if not self.valves.FINNHUB_API_KEY:
+            return "错误: 请先在工具设置中配置 Finnhub API Key"
 
         try:
-            data = client.company_earnings(symbol, limit=limit)
+            url = "https://finnhub.io/api/v1/stock/peers"
+            params = {"symbol": symbol, "token": self.valves.FINNHUB_API_KEY}
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+
+            data = response.json()
+
             if not data:
-                return f"没有找到 {symbol} 的财报数据"
+                return f"未找到 {symbol} 的同行公司"
 
-            result = f"**{symbol} 财报数据**\n\n"
-            for item in data:
-                actual = item.get("actual", "N/A")
-                estimate = item.get("estimate", "N/A")
-                surprise = item.get("surprise", "N/A")
-                result += f"**{item.get('period', 'N/A')}**\n"
-                result += f"   实际EPS: ${actual}\n"
-                result += f"   预期EPS: ${estimate}\n"
-                result += f"   差异: ${surprise}\n"
-                result += f"   惊喜%: {item.get('surprisePercent', 'N/A')}%\n\n"
+            result = f"{symbol} 的同行公司:\n\n"
+            result += ", ".join(data)
 
-            return result
+            return result.strip()
+
         except Exception as e:
-            return f"获取财报数据失败: {str(e)}"
+            return f"获取同行公司失败: {str(e)}"
 
-    def get_price_target(
-        self,
-        symbol: str,
-        __user__: dict = {},
-    ) -> str:
+    def finnhub_company_basic_financials(self, symbol: str, metric: str = "all") -> str:
         """
-        获取分析师目标价
+        获取公司基本财务指标
 
-        :param symbol: 股票代码
-        :return: 目标价、最高价、最低价等
+        :param symbol: 股票代码，如 AAPL, TSLA
+        :param metric: 指标类型，默认为 all
+        :return: 财务指标信息
         """
-        client = self._get_client()
-        if isinstance(client, str):
-            return client
+        if not self.valves.FINNHUB_API_KEY:
+            return "错误: 请先在工具设置中配置 Finnhub API Key"
 
         try:
-            data = client.price_target(symbol)
-            return f"""
-            **{symbol} 分析师目标价**
-            
-            目标价: ${data.get('targetMean', 'N/A')}
-            最高目标: ${data.get('targetHigh', 'N/A')}
-            最低目标: ${data.get('targetLow', 'N/A')}
-            目标中位数: ${data.get('targetMedian', 'N/A')}
-            分析师数量: {data.get('numberOfAnalysts', 'N/A')}
-            更新时间: {data.get('lastUpdated', 'N/A')}
-            """
-        except Exception as e:
-            return f"获取目标价失败: {str(e)}"
+            url = "https://finnhub.io/api/v1/stock/metric"
+            params = {
+                "symbol": symbol,
+                "metric": metric,
+                "token": self.valves.FINNHUB_API_KEY,
+            }
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
 
-    def get_basic_financials(
-        self,
-        symbol: str,
-        __user__: dict = {},
-    ) -> str:
-        """
-        获取基本财务指标
+            data = response.json()
 
-        :param symbol: 股票代码
-        :return: PE比率、市值、52周高低点等关键指标
-        """
-        client = self._get_client()
-        if isinstance(client, str):
-            return client
+            if not data or "metric" not in data:
+                return f"未找到 {symbol} 的财务指标"
 
-        try:
-            data = client.company_basic_financials(symbol, "all")
-            metrics = data.get("metric", {})
+            metrics = data["metric"]
+            result = f"{symbol} 基本财务指标:\n\n"
 
-            return f"""
-            **{symbol} 基本财务指标**
-            
-            **估值指标:**
-            市盈率(PE): {metrics.get('peBasicExclExtraTTM', 'N/A')}
-            市净率(PB): {metrics.get('pbQuarterly', 'N/A')}
-            市销率(PS): {metrics.get('psAnnual', 'N/A')}
-            
-            **市场数据:**
-            市值: ${metrics.get('marketCapitalization', 'N/A')}M
-            52周最高: ${metrics.get('52WeekHigh', 'N/A')}
-            52周最低: ${metrics.get('52WeekLow', 'N/A')}
-            
-            **盈利能力:**
-            ROE: {metrics.get('roeTTM', 'N/A')}%
-            ROA: {metrics.get('roaTTM', 'N/A')}%
-            利润率: {metrics.get('netProfitMarginTTM', 'N/A')}%
-            
-            **每股数据:**
-            每股收益(EPS): ${metrics.get('epsBasicExclExtraItemsTTM', 'N/A')}
-            每股账面价值: ${metrics.get('bookValuePerShareQuarterly', 'N/A')}
-            股息收益率: {metrics.get('dividendYieldIndicatedAnnual', 'N/A')}%
-            """
+            # 关键财务指标
+            key_metrics = {
+                "52周最高": metrics.get("52WeekHigh"),
+                "52周最低": metrics.get("52WeekLow"),
+                "市盈率 (P/E)": metrics.get("peBasicExclExtraTTM"),
+                "每股收益 (EPS)": metrics.get("epsBasicExclExtraItemsTTM"),
+                "市净率 (P/B)": metrics.get("pbQuarterly"),
+                "资产回报率 (ROA)": metrics.get("roaTTM"),
+                "股本回报率 (ROE)": metrics.get("roeTTM"),
+                "股息收益率": metrics.get("dividendYieldIndicatedAnnual"),
+                "Beta": metrics.get("beta"),
+                "市值": metrics.get("marketCapitalization"),
+            }
+
+            for key, value in key_metrics.items():
+                if value is not None:
+                    result += f"{key}: {value}\n"
+
+            return result.strip()
+
         except Exception as e:
             return f"获取财务指标失败: {str(e)}"
 
-    def search_symbol(
-        self,
-        query: str,
-        __user__: dict = {},
+    def finnhub_insider_transactions(self, symbol: str) -> str:
+        """
+        获取公司内部交易记录
+
+        :param symbol: 股票代码，如 TSLA, AAPL
+        :return: 内部交易信息
+        """
+        if not self.valves.FINNHUB_API_KEY:
+            return "错误: 请先在工具设置中配置 Finnhub API Key"
+
+        try:
+            url = "https://finnhub.io/api/v1/stock/insider-transactions"
+            params = {"symbol": symbol, "token": self.valves.FINNHUB_API_KEY}
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+
+            data = response.json()
+
+            if not data or "data" not in data:
+                return f"未找到 {symbol} 的内部交易记录"
+
+            transactions = data["data"][:10]  # 只显示前10条
+            result = f"{symbol} 内部交易记录 (最近10条):\n\n"
+
+            for i, txn in enumerate(transactions, 1):
+                result += f"{i}. {txn.get('name', 'N/A')}\n"
+                result += f"   日期: {txn.get('transactionDate', 'N/A')}\n"
+                result += f"   股份: {txn.get('share', 'N/A')}\n"
+                result += f"   价格: ${txn.get('transactionPrice', 'N/A')}\n"
+                result += f"   类型: {txn.get('transactionCode', 'N/A')}\n\n"
+
+            return result.strip()
+
+        except Exception as e:
+            return f"获取内部交易失败: {str(e)}"
+
+    def finnhub_insider_sentiment(
+        self, symbol: str, from_date: str = "2023-01-01", to_date: str = "2024-12-31"
     ) -> str:
+        """
+        获取公司内部交易情绪
+
+        :param symbol: 股票代码，如 TSLA, AAPL
+        :param from_date: 开始日期，格式 YYYY-MM-DD
+        :param to_date: 结束日期，格式 YYYY-MM-DD
+        :return: 内部情绪信息
+        """
+        if not self.valves.FINNHUB_API_KEY:
+            return "错误: 请先在工具设置中配置 Finnhub API Key"
+
+        try:
+            url = "https://finnhub.io/api/v1/stock/insider-sentiment"
+            params = {
+                "symbol": symbol,
+                "from": from_date,
+                "to": to_date,
+                "token": self.valves.FINNHUB_API_KEY,
+            }
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+
+            data = response.json()
+
+            if not data or "data" not in data:
+                return f"未找到 {symbol} 的内部情绪数据"
+
+            sentiments = data["data"][:5]  # 只显示前5条
+            result = f"{symbol} 内部情绪 ({from_date} 到 {to_date}):\n\n"
+
+            for i, sent in enumerate(sentiments, 1):
+                result += (
+                    f"{i}. {sent.get('year', 'N/A')}-{sent.get('month', 'N/A'):02d}\n"
+                )
+                result += f"   MSPR (净买入比例): {sent.get('mspr', 'N/A')}\n"
+                result += f"   变化: {sent.get('change', 'N/A')}\n\n"
+
+            return result.strip()
+
+        except Exception as e:
+            return f"获取内部情绪失败: {str(e)}"
+
+    def finnhub_financials_reported(self, symbol: str, freq: str = "annual") -> str:
+        """
+        获取公司财务报告 (原始数据)
+
+        :param symbol: 股票代码，如 AAPL, TSLA
+        :param freq: 频率 annual (年度) 或 quarterly (季度)
+        :return: 财务报告信息
+        """
+        if not self.valves.FINNHUB_API_KEY:
+            return "错误: 请先在工具设置中配置 Finnhub API Key"
+
+        try:
+            url = "https://finnhub.io/api/v1/stock/financials-reported"
+            params = {
+                "symbol": symbol,
+                "freq": freq,
+                "token": self.valves.FINNHUB_API_KEY,
+            }
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+
+            data = response.json()
+
+            if not data or "data" not in data:
+                return f"未找到 {symbol} 的财务报告"
+
+            reports = data["data"][:3]  # 只显示最近3条
+            result = f"{symbol} 财务报告 ({freq}):\n\n"
+
+            for i, report in enumerate(reports, 1):
+                result += f"{i}. 报告期: {report.get('year', 'N/A')}-Q{report.get('quarter', '')}\n"
+                result += f"   提交日期: {report.get('filedDate', 'N/A')}\n"
+                result += f"   接受日期: {report.get('acceptedDate', 'N/A')}\n"
+                result += f"   表格类型: {report.get('form', 'N/A')}\n\n"
+
+            return result.strip()
+
+        except Exception as e:
+            return f"获取财务报告失败: {str(e)}"
+
+    def finnhub_recommendation_trends(self, symbol: str) -> str:
+        """
+        获取分析师推荐趋势
+
+        :param symbol: 股票代码，如 AAPL, TSLA
+        :return: 推荐趋势信息
+        """
+        if not self.valves.FINNHUB_API_KEY:
+            return "错误: 请先在工具设置中配置 Finnhub API Key"
+
+        try:
+            url = "https://finnhub.io/api/v1/stock/recommendation"
+            params = {"symbol": symbol, "token": self.valves.FINNHUB_API_KEY}
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+
+            data = response.json()
+
+            if not data:
+                return f"未找到 {symbol} 的推荐信息"
+
+            result = f"{symbol} 分析师推荐趋势:\n\n"
+
+            for i, rec in enumerate(data[:3], 1):  # 显示最近3个月
+                result += f"{i}. 期间: {rec.get('period', 'N/A')}\n"
+                result += f"   强烈买入: {rec.get('strongBuy', 0)}\n"
+                result += f"   买入: {rec.get('buy', 0)}\n"
+                result += f"   持有: {rec.get('hold', 0)}\n"
+                result += f"   卖出: {rec.get('sell', 0)}\n"
+                result += f"   强烈卖出: {rec.get('strongSell', 0)}\n\n"
+
+            return result.strip()
+
+        except Exception as e:
+            return f"获取推荐趋势失败: {str(e)}"
+
+    def finnhub_earnings_surprises(self, symbol: str) -> str:
+        """
+        获取公司历史季度收益惊喜
+
+        :param symbol: 股票代码，如 AAPL, TSLA
+        :return: 收益惊喜信息
+        """
+        if not self.valves.FINNHUB_API_KEY:
+            return "错误: 请先在工具设置中配置 Finnhub API Key"
+
+        try:
+            url = "https://finnhub.io/api/v1/stock/earnings"
+            params = {"symbol": symbol, "token": self.valves.FINNHUB_API_KEY}
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+
+            data = response.json()
+
+            if not data:
+                return f"未找到 {symbol} 的收益数据"
+
+            result = f"{symbol} 历史季度收益惊喜:\n\n"
+
+            for i, earning in enumerate(data[:5], 1):  # 显示最近5个季度
+                result += f"{i}. 日期: {earning.get('period', 'N/A')}\n"
+                result += f"   实际EPS: ${earning.get('actual', 'N/A')}\n"
+                result += f"   预期EPS: ${earning.get('estimate', 'N/A')}\n"
+                result += f"   惊喜: ${earning.get('surprise', 'N/A')}\n"
+                result += f"   惊喜百分比: {earning.get('surprisePercent', 'N/A')}%\n\n"
+
+            return result.strip()
+
+        except Exception as e:
+            return f"获取收益惊喜失败: {str(e)}"
+
+    def finnhub_earnings_calendar(
+        self, from_date: str = None, to_date: str = None, days: int = 30
+    ) -> str:
+        """
+        获取收益发布日历
+
+        :param from_date: 开始日期，格式 YYYY-MM-DD，默认为今天
+        :param to_date: 结束日期，格式 YYYY-MM-DD，默认为未来30天
+        :param days: 如果未指定日期，查询未来多少天，默认30天
+        :return: 收益日历信息
+        """
+        if not self.valves.FINNHUB_API_KEY:
+            return "错误: 请先在工具设置中配置 Finnhub API Key"
+
+        try:
+            from datetime import datetime, timedelta
+
+            # 如果没有提供日期，使用默认值
+            if not from_date:
+                from_date = datetime.now().strftime("%Y-%m-%d")
+            if not to_date:
+                to_date = (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d")
+
+            url = "https://finnhub.io/api/v1/calendar/earnings"
+            params = {
+                "from": from_date,
+                "to": to_date,
+                "token": self.valves.FINNHUB_API_KEY,
+            }
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+
+            data = response.json()
+
+            if not data or "earningsCalendar" not in data:
+                return f"未找到 {from_date} 到 {to_date} 的收益日历"
+
+            calendar = data["earningsCalendar"][:20]  # 显示前20条
+            result = f"收益发布日历 ({from_date} 到 {to_date}):\n\n"
+
+            for i, event in enumerate(calendar, 1):
+                result += f"{i}. {event.get('symbol', 'N/A')}\n"
+                result += f"   日期: {event.get('date', 'N/A')}\n"
+                result += f"   预期EPS: ${event.get('epsEstimate', 'N/A')}\n"
+                result += f"   盘前/盘后: {event.get('hour', 'N/A')}\n\n"
+
+            return result.strip()
+
+        except Exception as e:
+            return f"获取收益日历失败: {str(e)}"
+
+    def finnhub_market_news(self, category: str = "general", limit: int = 5) -> str:
+        """
+        获取市场新闻
+
+        :param category: 新闻类别 (general, forex, crypto, merger)
+        :param limit: 返回新闻数量，默认5条
+        :return: 市场新闻列表
+        """
+        if not self.valves.FINNHUB_API_KEY:
+            return "错误: 请先在工具设置中配置 Finnhub API Key"
+
+        try:
+            url = "https://finnhub.io/api/v1/news"
+            params = {"category": category, "token": self.valves.FINNHUB_API_KEY}
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+
+            data = response.json()
+
+            if not data:
+                return "未找到相关新闻"
+
+            result = f"市场新闻 ({category.upper()}):\n\n"
+
+            for i, news in enumerate(data[:limit], 1):
+                result += f"{i}. {news.get('headline', 'N/A')}\n"
+                result += f"   日期: {news.get('datetime', 'N/A')}\n"
+                result += f"   来源: {news.get('source', 'N/A')}\n"
+                result += f"   摘要: {news.get('summary', 'N/A')[:200]}...\n"
+                result += f"   链接: {news.get('url', '#')}\n\n"
+                result += "---\n\n"
+
+            return result.strip()
+
+        except Exception as e:
+            return f"获取市场新闻失败: {str(e)}"
+
+    def finnhub_company_news(self, symbol: str, days: int = 7) -> str:
+        """
+        获取特定公司新闻
+
+        :param symbol: 股票代码
+        :param days: 获取最近几天的新闻，默认7天
+        :return: 公司新闻列表
+        """
+        if not self.valves.FINNHUB_API_KEY:
+            return "错误: 请先在工具设置中配置 Finnhub API Key"
+
+        try:
+            from datetime import datetime, timedelta
+
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=days)
+
+            url = "https://finnhub.io/api/v1/company-news"
+            params = {
+                "symbol": symbol,
+                "from": start_date.strftime("%Y-%m-%d"),
+                "to": end_date.strftime("%Y-%m-%d"),
+                "token": self.valves.FINNHUB_API_KEY,
+            }
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+
+            data = response.json()
+
+            if not data:
+                return f"未找到 {symbol} 的相关新闻"
+
+            result = f"{symbol} 公司新闻 (最近{days}天):\n\n"
+
+            for i, news in enumerate(data[:5], 1):
+                date = datetime.fromtimestamp(news.get("datetime", 0))
+                result += f"{i}. {news.get('headline', 'N/A')}\n"
+                result += f"   日期: {date.strftime('%Y-%m-%d %H:%M')}\n"
+                result += f"   来源: {news.get('source', 'N/A')}\n"
+                result += f"   摘要: {news.get('summary', 'N/A')[:200]}...\n"
+                result += f"   链接: {news.get('url', '#')}\n\n"
+                result += "---\n\n"
+
+            return result.strip()
+
+        except Exception as e:
+            return f"获取公司新闻失败: {str(e)}"
+
+    def finnhub_search_symbol(self, query: str) -> str:
         """
         搜索股票代码
 
         :param query: 搜索关键词（公司名称或股票代码）
         :return: 匹配的股票列表
         """
-        client = self._get_client()
-        if isinstance(client, str):
-            return client
+        if not self.valves.FINNHUB_API_KEY:
+            return "错误: 请先在工具设置中配置 Finnhub API Key"
 
         try:
-            data = client.symbol_lookup(query)
-            results = data.get("result", [])
+            url = "https://finnhub.io/api/v1/search"
+            params = {"q": query, "token": self.valves.FINNHUB_API_KEY}
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
 
-            if not results:
-                return f"没有找到匹配 '{query}' 的股票"
+            data = response.json()
 
-            result = f"**搜索结果: '{query}'**\n\n"
-            for item in results[:10]:  # 限制显示前10个
-                result += f"**{item.get('description', 'N/A')}**\n"
+            if not data.get("result"):
+                return f"未找到匹配的股票: {query}"
+
+            result = f"搜索结果: {query}\n\n"
+
+            for i, item in enumerate(data["result"][:10], 1):
+                result += f"{i}. {item.get('description', 'N/A')}\n"
                 result += f"   代码: {item.get('symbol', 'N/A')}\n"
-                result += f"   类型: {item.get('type', 'N/A')}\n"
-                result += f"   交易所: {item.get('displaySymbol', 'N/A')}\n\n"
+                result += f"   类型: {item.get('type', 'N/A')}\n\n"
 
-            return result
+            return result.strip()
+
         except Exception as e:
             return f"搜索失败: {str(e)}"
-
-    def get_market_news(
-        self,
-        category: Literal["general", "forex", "crypto", "merger"] = "general",
-        __user__: dict = {},
-    ) -> str:
-        """
-        获取市场新闻
-
-        :param category: 新闻类别 (general, forex, crypto, merger)
-        :return: 最新市场新闻
-        """
-        client = self._get_client()
-        if isinstance(client, str):
-            return client
-
-        try:
-            news = client.general_news(category, min_id=0)
-            if not news:
-                return f"没有找到 {category} 类别的新闻"
-
-            result = f"**市场新闻 - {category.upper()}**\n\n"
-            for i, item in enumerate(news[:5], 1):
-                result += f"{i}. **{item.get('headline', 'N/A')}**\n"
-                result += f"   日期: {item.get('datetime', 'N/A')}\n"
-                result += f"   链接: {item.get('url', 'N/A')}\n"
-                result += f"   摘要: {item.get('summary', 'N/A')[:150]}...\n\n"
-
-            return result
-        except Exception as e:
-            return f"获取市场新闻失败: {str(e)}"
-
-    def get_stock_peers(
-        self,
-        symbol: str,
-        __user__: dict = {},
-    ) -> str:
-        """
-        获取同行公司列表
-
-        :param symbol: 股票代码
-        :return: 相同行业的竞争对手
-        """
-        client = self._get_client()
-        if isinstance(client, str):
-            return client
-
-        try:
-            peers = client.company_peers(symbol)
-            if not peers:
-                return f"没有找到 {symbol} 的同行公司"
-
-            result = f"**{symbol} 的同行公司**\n\n"
-            result += ", ".join(peers)
-
-            return result
-        except Exception as e:
-            return f"获取同行公司失败: {str(e)}"
