@@ -10,3 +10,5 @@
    docker ps # get your container info
    docker exec <container_name_or_ID> pip install finnhub-python
    ```
+## Change log
+v2.0 change to "request", no longer needs finnhub module
