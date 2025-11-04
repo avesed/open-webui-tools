@@ -1,2 +1,2 @@
-## A list of tools I created for Open-WebUI
+## A list of tools for Open-WebUI
 
