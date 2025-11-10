@@ -2,7 +2,7 @@
 title: News
 author: Avesed
 description: Get news from newsapi.org
-version: 1.0.0
+version: 1.0.1
 """
 
 from pydantic import BaseModel, Field
@@ -29,7 +29,7 @@ class Tools:
         Get the top headlines. (Use at least one param, set :param category: to general as default)
 
         :param q: Keywords or a phrase to search for (optional, must be in English)
-        :param category: Category of the news, e.g., general, business, entertainment, health, science, sports, technology (optional)
+        :param category: Category of the news, e.g., general, business, entertainment, health, science, sports, technology
         :param country: 2-letter ISO 3166-1 country code, e.g., us, gb, cn (optional, cannot be used with sources)
         :param sources: Comma-separated news sources, e.g., bbc-news,the-verge (optional, cannot be used with country)
         :return: Top headlines articles
@@ -100,7 +100,7 @@ class Tools:
         :param q: Keywords or a phrase to search for (optional, must be in English)
         :param sources: Comma-separated news sources, e.g., bbc-news,the-verge (optional)
         :param domains: Comma-separated domains, e.g., bbc.co.uk,techcrunch.com (optional)
-        :param from_param: Start date in YYYY-MM-DD format, must be within 30 days (optional)
+        :param from_param: Start date in YYYY-MM-DD format, must be within 30 days (If use :param to:, :param from_param: must be used)
         :param to: End date in YYYY-MM-DD format (optional)
         :return: News articles matching the query
         """
